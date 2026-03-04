@@ -1,0 +1,3 @@
+#!/bin/bash
+cd /Users/yu2/projects/voiceinput
+exec env PYTHONUNBUFFERED=1 ./venv/bin/python voiceinput.py >> voiceinput.log 2>&1

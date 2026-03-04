@@ -96,6 +96,28 @@ def load_model(model_size="medium"):
 
 # ── Audio Recording ────────────────────────────────────────────────
 
+def _find_input_device():
+    """Find a working input device, return its index or None for default."""
+    # Try the system default first
+    try:
+        info = sd.query_devices(kind="input")
+        if info and info["max_input_channels"] > 0:
+            return None  # default works
+    except Exception:
+        pass
+
+    # Fall back: scan all devices for one with input channels
+    try:
+        for i, dev in enumerate(sd.query_devices()):
+            if dev["max_input_channels"] > 0:
+                print(f"  使用音频设备: {dev['name']}")
+                return i
+    except Exception:
+        pass
+
+    return None
+
+
 def _audio_callback(indata, frames, time_info, status):
     """sounddevice stream callback — accumulate frames."""
     if _recording:
@@ -109,15 +131,23 @@ def start_recording():
     with _lock:
         if _recording or _busy:
             return
-        _recording = True
-        _audio_frames = []
-        _stream = sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="float32",
-            callback=_audio_callback,
-        )
-        _stream.start()
+        try:
+            device = _find_input_device()
+            _recording = True
+            _audio_frames = []
+            _stream = sd.InputStream(
+                device=device,
+                samplerate=SAMPLE_RATE,
+                channels=CHANNELS,
+                dtype="float32",
+                callback=_audio_callback,
+            )
+            _stream.start()
+        except Exception as e:
+            _recording = False
+            print(f"  无法打开麦克风: {e}")
+            notify("语音输入", "无法打开麦克风，请检查权限")
+            return
 
     play_sound("Tink")
     print("  🎤 录音中… (双击右Option停止)")
@@ -209,10 +239,8 @@ def make_on_press(language):
     def on_press(key):
         global _last_option_time
 
-        # Detect right Option: pynput Key.alt_r or macOS vk 61
+        # Detect right Option key
         is_right_opt = key == Key.alt_r
-        if not is_right_opt and hasattr(key, "vk"):
-            is_right_opt = key.vk == 61
 
         if not is_right_opt:
             return
