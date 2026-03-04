@@ -35,6 +35,7 @@ _model = None
 _last_option_time = 0
 _lock = threading.Lock()
 _busy = False  # True while transcribing, prevents new recordings
+_actual_rate = SAMPLE_RATE  # actual sample rate used (may differ from SAMPLE_RATE)
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -96,26 +97,48 @@ def load_model(model_size="medium"):
 
 # ── Audio Recording ────────────────────────────────────────────────
 
+def _try_open_device(device, rate):
+    """Try to open a device at a given sample rate. Returns True if it works."""
+    try:
+        s = sd.InputStream(device=device, samplerate=rate, channels=CHANNELS,
+                           dtype="float32", blocksize=1024)
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
 def _find_input_device():
-    """Find a working input device, return its index or None for default."""
+    """Find a working input device, return (device_index_or_None, sample_rate)."""
     # Try the system default first
     try:
         info = sd.query_devices(kind="input")
         if info and info["max_input_channels"] > 0:
-            return None  # default works
+            if _try_open_device(None, SAMPLE_RATE):
+                return None, SAMPLE_RATE
+            # Try the device's own default sample rate
+            native_rate = int(info["default_samplerate"])
+            if native_rate != SAMPLE_RATE and _try_open_device(None, native_rate):
+                print(f"  默认设备不支持 {SAMPLE_RATE}Hz，使用 {native_rate}Hz")
+                return None, native_rate
     except Exception:
         pass
 
-    # Fall back: scan all devices for one with input channels
+    # Fall back: scan all devices for one that actually opens
     try:
         for i, dev in enumerate(sd.query_devices()):
             if dev["max_input_channels"] > 0:
-                print(f"  使用音频设备: {dev['name']}")
-                return i
+                if _try_open_device(i, SAMPLE_RATE):
+                    print(f"  使用音频设备: {dev['name']}")
+                    return i, SAMPLE_RATE
+                native_rate = int(dev["default_samplerate"])
+                if native_rate != SAMPLE_RATE and _try_open_device(i, native_rate):
+                    print(f"  使用音频设备: {dev['name']} ({native_rate}Hz)")
+                    return i, native_rate
     except Exception:
         pass
 
-    return None
+    return None, SAMPLE_RATE
 
 
 def _audio_callback(indata, frames, time_info, status):
@@ -126,18 +149,19 @@ def _audio_callback(indata, frames, time_info, status):
 
 def start_recording():
     """Begin capturing audio from the default microphone."""
-    global _recording, _audio_frames, _stream
+    global _recording, _audio_frames, _stream, _actual_rate
 
     with _lock:
         if _recording or _busy:
             return
         try:
-            device = _find_input_device()
+            device, rate = _find_input_device()
+            _actual_rate = rate
             _recording = True
             _audio_frames = []
             _stream = sd.InputStream(
                 device=device,
-                samplerate=SAMPLE_RATE,
+                samplerate=rate,
                 channels=CHANNELS,
                 dtype="float32",
                 callback=_audio_callback,
@@ -146,7 +170,7 @@ def start_recording():
         except Exception as e:
             _recording = False
             print(f"  无法打开麦克风: {e}")
-            notify("语音输入", "无法打开麦克风，请检查权限")
+            notify("语音输入", "无法打开麦克风，请检查权限或连接音频设备")
             return
 
     play_sound("Tink")
@@ -177,7 +201,18 @@ def stop_recording_and_transcribe(language):
         return
 
     audio = np.concatenate(frames, axis=0).flatten()
-    duration = len(audio) / SAMPLE_RATE
+    recorded_rate = _actual_rate
+
+    # Resample to 16kHz if recorded at a different rate (Whisper expects 16kHz)
+    if recorded_rate != SAMPLE_RATE:
+        duration = len(audio) / recorded_rate
+        ratio = SAMPLE_RATE / recorded_rate
+        new_len = int(len(audio) * ratio)
+        indices = np.linspace(0, len(audio) - 1, new_len)
+        audio = np.interp(indices, np.arange(len(audio)), audio).astype(np.float32)
+        print(f"  重采样: {int(recorded_rate)}Hz → {SAMPLE_RATE}Hz")
+    else:
+        duration = len(audio) / SAMPLE_RATE
 
     if duration < MIN_DURATION:
         print(f"  录音太短 ({duration:.1f}s)，已忽略")
