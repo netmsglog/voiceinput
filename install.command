@@ -55,6 +55,7 @@ echo "  安装到 $INSTALL_DIR ..."
 mkdir -p "$INSTALL_DIR"
 
 cp -f voiceinput.py "$INSTALL_DIR/"
+cp -f silero_vad_onnx.py "$INSTALL_DIR/"
 cp -f requirements.txt "$INSTALL_DIR/"
 cp -Rf VoiceInput.app "$INSTALL_DIR/"
 
@@ -123,7 +124,10 @@ echo "  ════════════════════════
 echo "    ✅ 安装成功！"
 echo "  ══════════════════════════════════════"
 echo
-echo "  用法: 双击右 Option 键 → 开始/停止录音"
+echo "  用法: 双击右 Option 键 → 开始录音，说完自动停止"
+echo
+echo "  📝 自定义配置: 编辑 ~/.voiceinput/config.json"
+echo "     可配置: 模型大小、语言、VAD、LLM 纠错等"
 echo
 echo "  ⚠️  首次使用需要授权三个权限："
 echo "     1. 辅助功能 (Accessibility)"
@@ -145,10 +149,11 @@ display dialog "VoiceInput 安装成功！
   2. 输入监控 (Input Monitoring)
   3. 麦克风 (Microphone)
 
-授权后即可使用：双击右 Option 键开始/停止录音。
+授权后即可使用：双击右 Option 键 → 开始录音，说完自动停止。
 
-Whisper 模型会在首次录音时自动下载（约1.5GB）。
+模型会在首次录音时自动下载（Whisper ~1.5GB, LLM ~900MB）。
 
+自定义配置：编辑 ~/.voiceinput/config.json
 卸载方式：运行 ~/.voiceinput/uninstall.command" with title "VoiceInput" buttons {"好的"} default button "好的"
 '
 

@@ -1,23 +1,25 @@
 # VoiceInput
 
-macOS system-wide voice input tool. Double-tap the right Option key to start/stop recording, and the transcribed text is automatically pasted at the current cursor position.
+macOS system-wide voice input tool. Double-tap the right Option key to start recording, stop speaking and text is automatically pasted at the current cursor position.
 
-macOS 系统级语音输入工具 — 双击右 Option 键录音，识别后自动粘贴文字到光标处。
+macOS 系统级语音输入工具 — 双击右 Option 键开始录音，说完自动停止，识别并纠错后自动粘贴文字到光标处。
 
 ---
 
 ## Features / 功能
 
-- **System-wide hotkey / 全局快捷键** — Double-tap right Option key to toggle recording. Works in any app.
-  双击右 Option 键开始/停止录音，任何应用中均可使用。
+- **System-wide hotkey / 全局快捷键** — Double-tap right Option key to start recording. Works in any app.
+  双击右 Option 键开始录音，任何应用中均可使用。
 - **Chinese + English / 中英混合** — Powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Handles mixed Chinese-English well (e.g. "用 React 写一个 component").
   基于 faster-whisper，中英混合识别，自动保留英文术语。
 - **Fully local / 完全本地** — No API key, no cloud. Audio never leaves your machine.
   无需 API Key，无需联网，音频不出本机。
 - **VAD auto-stop / 说完自动停** — Silero VAD detects end of speech and automatically stops recording. No need to double-tap again.
   基于 Silero VAD 检测语音结束，说完自动停止录音，无需再次双击。
-- **LLM correction / LLM 纠错** — Local Qwen2.5-0.5B model corrects transcription errors (Apple Silicon only, ~290MB).
-  本地 Qwen2.5-0.5B 小模型纠正转写错误（仅 Apple Silicon，约 290MB）。
+- **LLM correction / LLM 纠错** — Local LLM corrects transcription errors — homophones, repeated words, punctuation (Apple Silicon only).
+  本地 LLM 纠正转写错误 — 同音字、多余字、标点等（仅 Apple Silicon）。
+- **Configurable / 可配置** — All settings in one JSON file: model sizes, VAD, LLM correction, language, etc.
+  所有设置集中在一个 JSON 配置文件：模型大小、VAD、LLM 纠错、语言等。
 - **Auto-paste / 自动粘贴** — Transcription result is pasted at cursor via ⌘V.
   识别结果自动复制到剪贴板并粘贴到光标处。
 - **Auto-start on login / 开机自启** — Runs as a background service via LaunchAgent.
@@ -28,6 +30,7 @@ macOS 系统级语音输入工具 — 双击右 Option 键录音，识别后自�
 - macOS 12+
 - Python 3.8+
 - Microphone / 麦克风 (built-in / AirPods / external — 内置、AirPods 或外接均可)
+- Apple Silicon recommended (for LLM correction) / 推荐 Apple Silicon（用于 LLM 纠错）
 
 ---
 
@@ -97,46 +100,32 @@ Grant the following in **System Settings → Privacy & Security**:
    - Or **double-tap right Option** to manually stop / 也可**双击右 Option** 手动停止
 5. Wait briefly — text is corrected by LLM and pasted at cursor / 稍等片刻 — 文字经 LLM 纠错后自动粘贴到光标处
 
-The Whisper model (~1.5 GB) downloads automatically on first run.
-Whisper 模型（约 1.5GB）会在首次使用时自动下载。
+Models download automatically on first run: Whisper (~1.5 GB), Silero VAD (~2 MB), LLM (~900 MB).
+模型会在首次运行时自动下载：Whisper（约 1.5GB）、Silero VAD（约 2MB）、LLM（约 900MB）。
 
-### Options / 可选参数
+---
 
-```
---model {tiny,base,small,medium,large-v3}
-    Whisper model size (default: medium)
-    模型大小（默认: medium）
+## Configuration / 配置
 
-    tiny/base   — fast, lower accuracy / 速度快，精度低
-    small       — balanced / 均衡
-    medium      — recommended for Chinese + English / 推荐，中英混合效果好
-    large-v3    — best accuracy, slower / 最高精度，较慢
+VoiceInput uses a JSON config file at `~/.voiceinput/config.json` (auto-created on first run with default values).
+VoiceInput 使用 JSON 配置文件 `~/.voiceinput/config.json`（首次运行自动创建默认配置）。
 
---language LANG
-    Recognition language (default: zh)
-    识别语言（默认: zh 中文）
+**One-click install users / 一键安装用户**: edit the config and restart the service.
+编辑配置后重启服务即可生效。
 
---no-vad
-    Disable VAD auto-stop (use manual double-tap to stop)
-    禁用 VAD 自动停止（回到手动双击停止）
+```bash
+# Edit config / 编辑配置
+open ~/.voiceinput/config.json
 
---vad-silence-ms N
-    VAD silence threshold in ms (default: 1500)
-    VAD 静默阈值毫秒数（默认: 1500）
-
---no-correction
-    Disable LLM text correction
-    禁用 LLM 文本纠错
-
---correction-model MODEL
-    LLM correction model name (default: mlx-community/Qwen2.5-1.5B-Instruct-4bit)
-    LLM 纠错模型名称
+# Restart service to apply changes / 重启服务使配置生效
+launchctl unload ~/Library/LaunchAgents/com.voiceinput.plist
+launchctl load ~/Library/LaunchAgents/com.voiceinput.plist
 ```
 
-### Configuration File / 配置文件
+**Manual install users / 手动安装用户**: edit the config and restart the script.
+编辑配置后重启脚本即可。
 
-All settings can be saved in `~/.voiceinput/config.json` (auto-created on first run). CLI arguments override config values.
-所有设置可保存到 `~/.voiceinput/config.json`（首次运行自动创建）。命令行参数优先于配置文件。
+### Default config / 默认配置
 
 ```json
 {
@@ -149,35 +138,93 @@ All settings can be saved in `~/.voiceinput/config.json` (auto-created on first 
 }
 ```
 
-| Key / 配置项 | Type | Description / 说明 |
-|---|---|---|
-| `model` | string | Whisper model size / Whisper 模型大小 (`tiny`, `base`, `small`, `medium`, `large-v3`) |
-| `language` | string | Recognition language / 识别语言 (`zh`, `en`, etc.) |
-| `vad` | bool | Enable VAD auto-stop / 启用 VAD 自动停止 |
-| `vad_silence_ms` | int | Silence threshold in ms / 静默阈值毫秒数 |
-| `correction` | bool | Enable LLM text correction / 启用 LLM 纠错 |
-| `correction_model` | string | MLX LLM model name from HuggingFace / MLX LLM 模型名称 |
+### Config reference / 配置项说明
 
-Examples / 示例：
+| Key / 配置项 | Type | Default | Description / 说明 |
+|---|---|---|---|
+| `model` | string | `"medium"` | Whisper model size / Whisper 模型大小 |
+| `language` | string | `"zh"` | Recognition language / 识别语言 |
+| `vad` | bool | `true` | Enable VAD auto-stop / 启用 VAD 自动停止 |
+| `vad_silence_ms` | int | `1500` | Silence threshold in ms before auto-stop / 静默多少毫秒后自动停止 |
+| `correction` | bool | `true` | Enable LLM text correction / 启用 LLM 文本纠错 |
+| `correction_model` | string | `"mlx-community/Qwen2.5-1.5B-Instruct-4bit"` | HuggingFace MLX model for correction / 用于纠错的 HuggingFace MLX 模型 |
 
-```bash
-# Faster recognition / 更快识别
-./venv/bin/python voiceinput.py --model small
+### Whisper models / Whisper 模型选择
 
-# Best accuracy / 最高精度
-./venv/bin/python voiceinput.py --model large-v3
+| Model | Size | Speed | Accuracy | Recommended for / 推荐场景 |
+|---|---|---|---|---|
+| `tiny` | ~75 MB | Fastest / 最快 | Low / 低 | Quick tests / 快速测试 |
+| `base` | ~150 MB | Fast / 快 | Low / 较低 | Low-end machines / 低配机器 |
+| `small` | ~500 MB | Medium / 中等 | Medium / 中等 | Balanced / 均衡 |
+| `medium` | ~1.5 GB | Slower / 较慢 | High / 高 | **Chinese + English (default)** / **中英混合（默认）** |
+| `large-v3` | ~3 GB | Slowest / 最慢 | Highest / 最高 | Best accuracy / 最高精度 |
 
-# English-only mode / 纯英文模式
-./venv/bin/python voiceinput.py --language en
+### LLM correction models / LLM 纠错模型选择
 
-# Disable VAD, manual stop only / 禁用 VAD，手动停止
-./venv/bin/python voiceinput.py --no-vad
+LLM correction requires Apple Silicon. On Intel Macs it is automatically skipped.
+LLM 纠错需要 Apple Silicon，Intel Mac 会自动跳过。
 
-# Disable LLM correction / 禁用 LLM 纠错
-./venv/bin/python voiceinput.py --no-correction
+| Model | Size | Accuracy | Notes / 说明 |
+|---|---|---|---|
+| `mlx-community/Qwen2.5-0.5B-Instruct-4bit` | ~290 MB | Basic / 基础 | Punctuation fixes / 标点修正 |
+| `mlx-community/Qwen2.5-1.5B-Instruct-4bit` | ~900 MB | Good / 较好 | **Punctuation + dedup (default)** / **标点+去重（默认）** |
+| `mlx-community/Qwen2.5-7B-Instruct-4bit` | ~4 GB | Best / 最好 | Homophones + context / 同音字+上下文纠错 |
 
-# Shorter silence threshold / 更短的静默阈值
-./venv/bin/python voiceinput.py --vad-silence-ms 1000
+To disable LLM correction, set `"correction": false` in config.
+关闭 LLM 纠错，在配置中设置 `"correction": false`。
+
+### Example configurations / 配置示例
+
+**Lightweight — fast, no LLM / 轻量模式 — 快速，不纠错：**
+
+```json
+{
+  "model": "small",
+  "correction": false
+}
+```
+
+**Best quality — large Whisper + 7B LLM / 最佳质量 — 大模型+7B 纠错：**
+
+```json
+{
+  "model": "large-v3",
+  "correction_model": "mlx-community/Qwen2.5-7B-Instruct-4bit"
+}
+```
+
+**English only / 纯英文模式：**
+
+```json
+{
+  "model": "medium",
+  "language": "en"
+}
+```
+
+**Manual stop (no VAD) / 手动停止（关闭 VAD）：**
+
+```json
+{
+  "vad": false
+}
+```
+
+> Only include the keys you want to change — missing keys use default values.
+> 只需写要修改的配置项，缺省项使用默认值。
+
+### CLI overrides / 命令行覆盖
+
+CLI arguments override config file values for the current session.
+命令行参数会覆盖配置文件中的值（仅当次运行有效）。
+
+```
+--model {tiny,base,small,medium,large-v3}
+--language LANG
+--no-vad
+--vad-silence-ms N
+--no-correction
+--correction-model MODEL
 ```
 
 ---
@@ -251,7 +298,7 @@ launchctl list | grep voiceinput
 # Stop / 停止
 launchctl unload ~/Library/LaunchAgents/com.voiceinput.plist
 
-# Restart / 重启
+# Restart (e.g. after editing config) / 重启（如修改配置后）
 launchctl unload ~/Library/LaunchAgents/com.voiceinput.plist
 launchctl load ~/Library/LaunchAgents/com.voiceinput.plist
 
@@ -271,8 +318,8 @@ tail -f ~/.voiceinput/voiceinput.log
    Silero VAD（ONNX，约 2MB）实时监控音频，检测到语音后连续 1.5 秒静默即自动停止录音。
 4. **Transcription / 转录** — `faster-whisper` (CTranslate2 backend, int8 quantization) transcribes locally.
    `faster-whisper`（CTranslate2 后端，int8 量化）本地转录。
-5. **LLM correction / LLM 纠错** — Qwen2.5-0.5B (via `mlx-lm`, Apple Silicon) corrects transcription errors.
-   Qwen2.5-0.5B（通过 `mlx-lm`，Apple Silicon 加速）纠正转写错误。
+5. **LLM correction / LLM 纠错** — Local LLM (via `mlx-lm`, Apple Silicon) corrects transcription errors.
+   本地 LLM（通过 `mlx-lm`，Apple Silicon 加速）纠正转写错误。
 6. **Paste / 粘贴** — Result is copied via `pbcopy` and pasted via AppleScript (⌘V).
    结果通过 `pbcopy` 复制，AppleScript 模拟 ⌘V 粘贴。
 
@@ -293,8 +340,12 @@ tail -f ~/.voiceinput/voiceinput.log
 → 检查辅助功能权限是否已授权（用于模拟 ⌘V）。
 
 **Model download is slow / 模型下载慢**
-→ First run downloads ~1.5 GB. Use `--model small` (~500 MB) or `--model tiny` (~75 MB) for a smaller download.
-→ 首次运行下载约 1.5GB。可用 `--model small`（约 500MB）或 `--model tiny`（约 75MB）减小下载量。
+→ First run downloads Whisper (~1.5 GB) + LLM (~900 MB). Use `"model": "small"` or set `"correction": false` in config to reduce downloads.
+→ 首次运行下载 Whisper（约 1.5GB）+ LLM（约 900MB）。可在配置中用 `"model": "small"` 或 `"correction": false` 减少下载量。
+
+**LLM correction not working / LLM 纠错不生效**
+→ LLM correction requires Apple Silicon (M1/M2/M3/M4). On Intel Macs it is automatically skipped.
+→ LLM 纠错需要 Apple Silicon（M1/M2/M3/M4），Intel Mac 会自动跳过。
 
 **macOS blocks the installer / macOS 阻止安装器运行**
 → Right-click → Open, or run `xattr -cr` on the unzipped folder. See [Installation](#installation--安装).
