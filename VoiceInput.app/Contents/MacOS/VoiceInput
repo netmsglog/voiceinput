@@ -1,3 +1,5 @@
 #!/bin/bash
-cd /Users/yu2/projects/voiceinput
+# Resolve project root: VoiceInput.app/Contents/MacOS/VoiceInput → project/
+DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$DIR"
 exec env PYTHONUNBUFFERED=1 ./venv/bin/python voiceinput.py >> voiceinput.log 2>&1
